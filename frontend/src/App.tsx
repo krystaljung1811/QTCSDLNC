@@ -1,6 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from './api/client';
 import type { Seat, AuditLog, Showtime, Movie, Customer, Concession, OrderItem, AppUser } from './types';
+import {
+  FALLBACK_MOVIES,
+  FALLBACK_SHOWTIMES,
+  FALLBACK_SEATS,
+  FALLBACK_CUSTOMERS,
+  FALLBACK_CONCESSIONS,
+  FALLBACK_USERS,
+} from './api/fallbackData';
 import { Navbar } from './components/Navbar';
 import { BookingPage } from './pages/BookingPage';
 import { TestLabPage } from './pages/TestLabPage';
@@ -15,28 +23,17 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<string>('booking');
 
   // Quản lý người dùng và vai trò đăng nhập
-  const [availableUsers, setAvailableUsers] = useState<AppUser[]>([
-    { mauser: 1, tendangnhap: 'khach01', vaitro: 'KHACH', hoten: 'Nguyễn Văn An', makh: 1, manv: null },
-    { mauser: 2, tendangnhap: 'thungan01', vaitro: 'THU_NGAN', hoten: 'Lê Thu Ngân (Cầu Giấy)', makh: null, manv: 1 },
-    { mauser: 999, tendangnhap: 'admin', vaitro: 'QUAN_LY', hoten: 'Quản Trị Viên (DBA)', makh: null, manv: null },
-  ]);
-  const [currentUser, setCurrentUser] = useState<AppUser>({
-    mauser: 1,
-    tendangnhap: 'khach01',
-    vaitro: 'KHACH',
-    hoten: 'Nguyễn Văn An',
-    makh: 1,
-    manv: null,
-  });
+  const [availableUsers, setAvailableUsers] = useState<AppUser[]>(FALLBACK_USERS);
+  const [currentUser, setCurrentUser] = useState<AppUser>(FALLBACK_USERS[0]);
 
-  // Dữ liệu đọc 100% từ Oracle Database
-  const [seats, setSeats] = useState<Seat[]>([]);
+  // Dữ liệu đọc 100% từ Oracle Database (kèm fallback dự phòng)
+  const [seats, setSeats] = useState<Seat[]>(FALLBACK_SEATS);
   const [selectedSeats, setSelectedSeats] = useState<Seat[]>([]);
   const [logs, setLogs] = useState<AuditLog[]>([]);
-  const [showtimes, setShowtimes] = useState<Showtime[]>([]);
-  const [movies, setMovies] = useState<Movie[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [concessions, setConcessions] = useState<Concession[]>([]);
+  const [showtimes, setShowtimes] = useState<Showtime[]>(FALLBACK_SHOWTIMES);
+  const [movies, setMovies] = useState<Movie[]>(FALLBACK_MOVIES);
+  const [customers, setCustomers] = useState<Customer[]>(FALLBACK_CUSTOMERS);
+  const [concessions, setConcessions] = useState<Concession[]>(FALLBACK_CONCESSIONS);
   const [orders, setOrders] = useState<OrderItem[]>([]);
 
   const [currentShowtimeId, setCurrentShowtimeId] = useState<number>(1);
@@ -50,7 +47,7 @@ export default function App() {
     const id = stId || currentShowtimeId;
     try {
       const data = await api.getSeats(id);
-      setSeats(data);
+      setSeats(Array.isArray(data) && data.length > 0 ? data : FALLBACK_SEATS);
     } catch (e) {
       console.error('Lỗi nạp sơ đồ ghế từ Oracle:', e);
     }
@@ -60,7 +57,7 @@ export default function App() {
   const fetchLogs = useCallback(async () => {
     try {
       const data = await api.getAuditLogs();
-      setLogs(data);
+      setLogs(Array.isArray(data) ? data : []);
     } catch (e) {
       console.error('Lỗi nạp audit logs từ Oracle:', e);
     }
@@ -70,7 +67,7 @@ export default function App() {
   const fetchOrders = useCallback(async () => {
     try {
       const data = await api.getOrders();
-      setOrders(data);
+      setOrders(Array.isArray(data) ? data : []);
     } catch (e) {
       console.error('Lỗi nạp đơn hàng:', e);
     }
@@ -92,20 +89,24 @@ export default function App() {
         api.getShowtimes(),
         api.getCustomers(),
         api.getConcessions(),
-        api.getUsers().catch(() => []),
+        api.getUsers().catch(() => FALLBACK_USERS),
       ]);
 
-      setMovies(mvList);
-      setShowtimes(stList);
-      setCustomers(custList);
-      setConcessions(concList);
-      if (userList && userList.length > 0) {
-        setAvailableUsers(userList);
-      }
+      const safeMovies = Array.isArray(mvList) && mvList.length > 0 ? mvList : FALLBACK_MOVIES;
+      const safeShowtimes = Array.isArray(stList) && stList.length > 0 ? stList : FALLBACK_SHOWTIMES;
+      const safeCustomers = Array.isArray(custList) && custList.length > 0 ? custList : FALLBACK_CUSTOMERS;
+      const safeConcessions = Array.isArray(concList) && concList.length > 0 ? concList : FALLBACK_CONCESSIONS;
+      const safeUsers = Array.isArray(userList) && userList.length > 0 ? userList : FALLBACK_USERS;
 
-      if (stList.length > 0 && (!currentShowtimeId || !stList.some((s) => s.masuat === currentShowtimeId))) {
-        setCurrentShowtimeId(stList[0].masuat);
-        await fetchSeats(stList[0].masuat);
+      setMovies(safeMovies);
+      setShowtimes(safeShowtimes);
+      setCustomers(safeCustomers);
+      setConcessions(safeConcessions);
+      setAvailableUsers(safeUsers);
+
+      if (safeShowtimes.length > 0 && (!currentShowtimeId || !safeShowtimes.some((s) => s.masuat === currentShowtimeId))) {
+        setCurrentShowtimeId(safeShowtimes[0].masuat);
+        await fetchSeats(safeShowtimes[0].masuat);
       } else {
         await fetchSeats();
       }
